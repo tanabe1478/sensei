@@ -17,7 +17,11 @@
 ### 必要な環境
 
 - Node.js >= 22
+- [Codex CLI](https://github.com/openai/codex) (`npm i -g @openai/codex`)
 - Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
+- Codex の認証（以下のいずれか）:
+  - `codex login` で OAuth 認証（API キー不要）
+  - または `OPENAI_API_KEY` 環境変数
 
 ### インストール
 
@@ -50,7 +54,9 @@ docker compose up -d
 | `DISCORD_TOKEN` | Yes | Discord Bot トークン |
 | `DISCORD_ALLOWED_USER` | Yes | 操作を許可するユーザー ID |
 | `AUTO_REPLY_CHANNELS` | No | 自動返信するチャンネル ID（カンマ区切り） |
-| `AGENT_MODEL` | No | Claude のモデル名 |
+| `OPENAI_API_KEY` | No | OpenAI API キー（`codex login` で OAuth 認証済みなら不要） |
+| `AGENT_MODEL` | No | Codex で使用するモデル名（デフォルト: Codex CLI の設定に従う） |
+| `CODEX_SANDBOX` | No | サンドボックスモード: `read-only`, `workspace-write`, `danger-full-access`（デフォルト: `read-only`） |
 | `TIMEOUT_MS` | No | エージェント実行タイムアウト（デフォルト: 300000） |
 | `WORKSPACE_PATH` | No | 作業ディレクトリ（デフォルト: カレントディレクトリ） |
 | `SCHEDULER_ENABLED` | No | スケジューラ有効化（デフォルト: true） |

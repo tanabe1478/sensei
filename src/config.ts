@@ -12,6 +12,7 @@ export interface Config {
     readonly timeoutMs: number;
     readonly workdir: string;
     readonly idleTimeoutMs: number;
+    readonly sandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
   };
   readonly scheduler: {
     readonly enabled: boolean;
@@ -54,6 +55,7 @@ export function loadConfig(): Config {
       idleTimeoutMs: process.env.IDLE_TIMEOUT_MS
         ? parseInt(process.env.IDLE_TIMEOUT_MS, 10)
         : DEFAULT_IDLE_TIMEOUT_MS,
+      sandbox: (process.env.CODEX_SANDBOX as 'read-only' | 'workspace-write' | 'danger-full-access') || 'read-only',
     },
     scheduler: {
       enabled: process.env.SCHEDULER_ENABLED !== 'false',

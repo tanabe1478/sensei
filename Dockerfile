@@ -1,5 +1,7 @@
 FROM node:22-slim
 
+RUN npm install -g @openai/codex
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

@@ -1,5 +1,5 @@
 import { loadConfig } from './config.js';
-import { ClaudeCodeRunner } from './agent/claude-code.js';
+import { CodexRunner } from './agent/codex.js';
 import { SessionStore } from './session/store.js';
 import { Scheduler } from './scheduler/scheduler.js';
 import { startBot } from './discord/bot.js';
@@ -9,10 +9,11 @@ async function main(): Promise<void> {
 
   console.log('[sensei] Starting...');
 
-  const agent = new ClaudeCodeRunner({
+  const agent = new CodexRunner({
     model: config.agent.model,
     timeoutMs: config.agent.timeoutMs,
     workdir: config.agent.workdir,
+    sandbox: config.agent.sandbox,
   });
 
   const sessions = new SessionStore(config.dataDir);
