@@ -30,7 +30,9 @@ git clone https://github.com/tanabe1478/sensei.git
 cd sensei
 npm install
 cp .env.example .env
+cp SOUL.md.example SOUL.md
 # Edit .env with your tokens
+# Edit SOUL.md to define your bot's personality
 npm run build
 npm start
 ```
@@ -80,7 +82,13 @@ docker compose up -d
 
 ## SOUL.md
 
-`SOUL.md` in the project root defines the bot's personality. Edit it to customize how Sensei behaves — its tone, priorities, and boundaries.
+`SOUL.md` in the project root defines the bot's personality. Copy the template and customize it:
+
+```bash
+cp SOUL.md.example SOUL.md
+```
+
+`SOUL.md` is gitignored — your personality config stays private. Edit it to define tone, priorities, and boundaries.
 
 ## Memory
 
@@ -88,6 +96,8 @@ Sensei maintains persistent memory as plain Markdown files in the data directory
 
 - **`memory/MEMORY.md`** — Long-term memory (preferences, project info, decisions)
 - **`memory/YYYY-MM-DD.md`** — Daily logs (conversation highlights, task progress)
+
+All memory files are stored in the data directory (`.sensei/` by default), which is gitignored. Your conversation history and personal data never leave your machine.
 
 Memory is automatically included in the system prompt and can be managed via `/memory` commands or natural language ("remember this", "forget that").
 

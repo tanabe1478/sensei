@@ -9,3 +9,4 @@ dist/
 workspace/*
 !workspace/.gitkeep
 .sensei/
+SOUL.md
