@@ -1,13 +1,15 @@
 import type { AgentRunner, AgentResult, AgentRunOptions } from './types.js';
 import { runProcess } from './process.js';
 import { DEFAULT_TIMEOUT_MS } from '../constants.js';
-import { SYSTEM_PROMPT } from './system-prompt.js';
+import { buildSystemPrompt } from './system-prompt.js';
+import type { MemoryStore } from '../memory/store.js';
 
 interface CodexConfig {
   readonly model?: string;
   readonly timeoutMs?: number;
   readonly workdir?: string;
   readonly sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  readonly memory?: MemoryStore;
 }
 
 /** OpenAI Codex CLI を使ったエージェントランナー */
@@ -33,11 +35,16 @@ export class CodexRunner implements AgentRunner {
     }
 
     if (options?.sessionId) {
-      // Codex exec resume で前回セッションを継続
       args.splice(1, 0, 'resume', '--session-id', options.sessionId);
     }
 
-    const fullPrompt = `${SYSTEM_PROMPT}\n\n## ユーザーの入力\n${prompt}`;
+    // SOUL.md + メモリを含むシステムプロンプトを構築
+    let fullPrompt = prompt;
+    if (this.config.memory && this.config.workdir) {
+      const systemPrompt = buildSystemPrompt(this.config.workdir, this.config.memory);
+      fullPrompt = `${systemPrompt}\n\n---\n## ユーザーの入力\n${prompt}`;
+    }
+
     args.push(fullPrompt);
 
     const { promise, kill } = runProcess({

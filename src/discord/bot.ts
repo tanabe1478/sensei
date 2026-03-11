@@ -16,16 +16,18 @@ import { SessionStore } from '../session/store.js';
 import { Scheduler } from '../scheduler/scheduler.js';
 import { parseScheduleInput } from '../scheduler/parser.js';
 import { readFileSync } from 'fs';
+import { MemoryStore } from '../memory/store.js';
 
 interface BotDeps {
   readonly config: Config;
   readonly agent: AgentRunner;
   readonly sessions: SessionStore;
   readonly scheduler: Scheduler;
+  readonly memory?: MemoryStore;
 }
 
 export async function startBot(deps: BotDeps): Promise<void> {
-  const { config, agent, sessions, scheduler } = deps;
+  const { config, agent, sessions, scheduler, memory } = deps;
   const skills: Skill[] = loadSkills(config.agent.workdir);
   console.log(`[sensei] Loaded ${skills.length} skills`);
 
@@ -70,7 +72,7 @@ export async function startBot(deps: BotDeps): Promise<void> {
     }
 
     try {
-      await handleCommand(interaction, { config, agent, sessions, scheduler, skills });
+      await handleCommand(interaction, { config, agent, sessions, scheduler, memory, skills });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (interaction.deferred || interaction.replied) {
@@ -115,7 +117,7 @@ async function handleCommand(
   interaction: ChatInputCommandInteraction,
   ctx: CommandContext,
 ): Promise<void> {
-  const { agent, sessions, scheduler, skills } = ctx;
+  const { agent, sessions, scheduler, memory, skills } = ctx;
   const channelId = interaction.channelId;
 
   switch (interaction.commandName) {
@@ -157,6 +159,36 @@ async function handleCommand(
         } else {
           await (interaction.channel as { send: (msg: string) => Promise<unknown> } | null)?.send(chunk);
         }
+      }
+      return;
+    }
+
+    case 'memory': {
+      if (!memory) {
+        await interaction.reply({ content: 'メモリが初期化されていません', ephemeral: true });
+        return;
+      }
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'show') {
+        await interaction.reply(memory.summary());
+      } else if (sub === 'remember') {
+        const content = interaction.options.getString('content', true);
+        memory.appendLongTerm(content);
+        await interaction.reply(`記憶しました: ${content.slice(0, 100)}`);
+      } else if (sub === 'search') {
+        const keyword = interaction.options.getString('keyword', true);
+        const results = memory.search(keyword);
+        if (results.length === 0) {
+          await interaction.reply('該当する記憶が見つかりませんでした');
+        } else {
+          const lines = results.flatMap((r: { file: string; lines: string[] }) =>
+            [`**${r.file}**:`, ...r.lines.slice(0, 5).map((l: string) => `> ${l}`)]
+          );
+          await interaction.reply(lines.join('\n').slice(0, 1900));
+        }
+      } else if (sub === 'clear') {
+        memory.writeLongTerm('');
+        await interaction.reply('長期記憶をクリアしました');
       }
       return;
     }

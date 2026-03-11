@@ -43,6 +43,24 @@ export function buildCoreCommands(): ReturnType<SlashCommandBuilder['toJSON']>[]
           )
       )
       .toJSON(),
+    new SlashCommandBuilder()
+      .setName('memory')
+      .setDescription('メモリ管理')
+      .addSubcommand((sub) => sub.setName('show').setDescription('メモリの概要を表示'))
+      .addSubcommand((sub) =>
+        sub.setName('remember').setDescription('情報を記憶する')
+          .addStringOption((opt) =>
+            opt.setName('content').setDescription('記憶する内容').setRequired(true)
+          )
+      )
+      .addSubcommand((sub) =>
+        sub.setName('search').setDescription('メモリを検索')
+          .addStringOption((opt) =>
+            opt.setName('keyword').setDescription('検索キーワード').setRequired(true)
+          )
+      )
+      .addSubcommand((sub) => sub.setName('clear').setDescription('長期記憶をクリア'))
+      .toJSON(),
   ];
 }
 

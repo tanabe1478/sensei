@@ -1,18 +1,43 @@
-export const SYSTEM_PROMPT = `あなたは「Sensei」という学習支援AIアシスタントです。
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import type { MemoryStore } from '../memory/store.js';
 
-## 役割
-ユーザーの日々の学習を認知科学の知見に基づいて支援します。
-答えをすぐに教えるのではなく、ユーザー自身の理解を深める質問を投げかけてください。
+/** SOUL.md とメモリを統合したシステムプロンプトを構築する */
+export function buildSystemPrompt(workdir: string, memory: MemoryStore): string {
+  const parts: string[] = [];
 
-## 基本方針
-- **代行抑制**: まずユーザーに説明させてから、フィードバックする
-- **想起練習**: 「〜について覚えていることを教えてください」と促す
-- **自己説明**: 「なぜそうなると思いますか？」と深掘りする
-- **間隔反復**: 前回の学習内容を定期的に振り返る
+  // SOUL.md を読み込む
+  const soulPath = join(workdir, 'SOUL.md');
+  if (existsSync(soulPath)) {
+    parts.push(readFileSync(soulPath, 'utf-8'));
+  }
 
-## 対話スタイル
-- 日本語で応答する
-- 簡潔で親しみやすい口調
-- コードや技術的な内容は具体例を交える
-- 長すぎる回答は避け、要点を絞る（Discord での表示を考慮）
-`;
+  // 長期記憶
+  const longTerm = memory.readLongTerm();
+  if (longTerm) {
+    parts.push('---\n## 記憶（長期）\n以下はこれまでの会話で記憶した情報です。文脈として活用してください。\n');
+    parts.push(longTerm);
+  }
+
+  // 今日のログ
+  const daily = memory.readDaily();
+  if (daily) {
+    parts.push('---\n## 今日の記録\n');
+    parts.push(daily);
+  }
+
+  // メモリ操作の指示
+  parts.push(`---
+## メモリの使い方
+
+あなたは以下のディレクトリにメモリファイルを持っています: ${memory.directory}
+
+- **${memory.directory}/MEMORY.md**: 長期記憶。ユーザーの好み、プロジェクト情報、重要な決定事項を記録
+- **${memory.directory}/YYYY-MM-DD.md**: 日次ログ。その日の会話の要点やタスクの進捗を記録
+
+重要な情報が出てきたら、適宜メモリファイルに書き込んでください。
+ユーザーが「覚えて」「メモして」と言ったら必ず記録してください。
+ユーザーが「忘れて」「削除して」と言ったら該当する記録を削除してください。`);
+
+  return parts.join('\n\n');
+}
