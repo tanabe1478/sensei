@@ -1,6 +1,7 @@
 import type { AgentRunner, AgentResult, AgentRunOptions } from './types.js';
 import { runProcess } from './process.js';
 import { DEFAULT_TIMEOUT_MS } from '../constants.js';
+import { SYSTEM_PROMPT } from './system-prompt.js';
 
 interface CodexConfig {
   readonly model?: string;
@@ -25,11 +26,7 @@ export class CodexRunner implements AgentRunner {
       args.push('--model', this.config.model);
     }
 
-    if (this.config.sandbox) {
-      args.push('--sandbox', this.config.sandbox);
-    } else {
-      args.push('--sandbox', 'read-only');
-    }
+    args.push('--sandbox', this.config.sandbox ?? 'workspace-write');
 
     if (this.config.workdir) {
       args.push('--cd', this.config.workdir);
@@ -40,7 +37,8 @@ export class CodexRunner implements AgentRunner {
       args.splice(1, 0, 'resume', '--session-id', options.sessionId);
     }
 
-    args.push(prompt);
+    const fullPrompt = `${SYSTEM_PROMPT}\n\n## ユーザーの入力\n${prompt}`;
+    args.push(fullPrompt);
 
     const { promise, kill } = runProcess({
       command: 'codex',
