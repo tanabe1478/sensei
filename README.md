@@ -1,43 +1,43 @@
 # Sensei
 
-認知科学に基づいた AI 学習支援 Discord Bot。
+An AI-powered Discord bot that acts as your personal partner for development, task management, and learning — powered by [Codex CLI](https://github.com/openai/codex).
 
-間隔反復（SM-2）、想起練習、自己説明などの学習理論を活用し、日々の学習を支援します。
+Sensei uses a **SOUL.md** personality definition and **persistent memory** (inspired by [OpenClaw](https://github.com/openinterface-ai/openclaw)) to maintain context across conversations and grow with you over time.
 
-## 機能
+## Features
 
-- **Discord Bot**: メンション or 自動返信チャンネルで AI と対話
-- **スキルシステム**: `skills/` ディレクトリの Markdown ファイルをコマンドとして実行
-- **間隔反復**: SM-2 アルゴリズムによる復習スケジューリング
-- **スケジューラ**: cron ジョブ / ワンタイムリマインダー（自然言語入力対応）
-- **セッション管理**: チャンネルごとにセッションを永続化
+- **Partner, not assistant** — Opinionated, proactive, remembers your context
+- **SOUL.md** — Defines the bot's personality, values, and behavior
+- **Persistent memory** — Markdown-based long-term memory and daily logs
+- **Skill system** — Drop a `SKILL.md` into `skills/` to register new slash commands
+- **Scheduler** — Cron jobs and one-time reminders with natural language input
+- **Learning support** — Spaced repetition (SM-2), recall practice, self-explanation (auxiliary)
+- **Session management** — Per-channel session persistence
 
-## セットアップ
-
-### 必要な環境
+## Prerequisites
 
 - Node.js >= 22
 - [Codex CLI](https://github.com/openai/codex) (`npm i -g @openai/codex`)
 - Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
-- Codex の認証（以下のいずれか）:
-  - `codex login` で OAuth 認証（API キー不要）
-  - または `OPENAI_API_KEY` 環境変数
+- Codex authentication (one of):
+  - `codex login` for OAuth (no API key needed)
+  - `OPENAI_API_KEY` environment variable
 
-### インストール
+## Setup
 
 ```bash
+git clone https://github.com/tanabe1478/sensei.git
+cd sensei
 npm install
 cp .env.example .env
-# .env を編集して DISCORD_TOKEN 等を設定
-```
-
-### 起動
-
-```bash
+# Edit .env with your tokens
 npm run build
 npm start
+```
 
-# 開発モード
+### Development
+
+```bash
 npm run dev
 ```
 
@@ -47,61 +47,80 @@ npm run dev
 docker compose up -d
 ```
 
-## 環境変数
+## Environment Variables
 
-| 変数 | 必須 | 説明 |
-|------|------|------|
-| `DISCORD_TOKEN` | Yes | Discord Bot トークン |
-| `DISCORD_ALLOWED_USER` | Yes | 操作を許可するユーザー ID |
-| `AUTO_REPLY_CHANNELS` | No | 自動返信するチャンネル ID（カンマ区切り） |
-| `OPENAI_API_KEY` | No | OpenAI API キー（`codex login` で OAuth 認証済みなら不要） |
-| `AGENT_MODEL` | No | Codex で使用するモデル名（デフォルト: Codex CLI の設定に従う） |
-| `CODEX_SANDBOX` | No | サンドボックスモード: `read-only`, `workspace-write`, `danger-full-access`（デフォルト: `read-only`） |
-| `TIMEOUT_MS` | No | エージェント実行タイムアウト（デフォルト: 300000） |
-| `WORKSPACE_PATH` | No | 作業ディレクトリ（デフォルト: カレントディレクトリ） |
-| `SCHEDULER_ENABLED` | No | スケジューラ有効化（デフォルト: true） |
-| `DATA_DIR` | No | データ保存先ディレクトリ |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_TOKEN` | Yes | Discord bot token |
+| `DISCORD_ALLOWED_USER` | Yes | Your Discord user ID |
+| `OPENAI_API_KEY` | No | OpenAI API key (not needed if authenticated via `codex login`) |
+| `AUTO_REPLY_CHANNELS` | No | Comma-separated channel IDs for auto-reply |
+| `AGENT_MODEL` | No | Model for Codex CLI (defaults to Codex CLI config) |
+| `CODEX_SANDBOX` | No | `read-only`, `workspace-write`, `danger-full-access` (default: `workspace-write`) |
+| `TIMEOUT_MS` | No | Agent execution timeout in ms (default: 300000) |
+| `WORKSPACE_PATH` | No | Working directory (default: cwd) |
+| `SCHEDULER_ENABLED` | No | Enable scheduler (default: true) |
+| `DATA_DIR` | No | Data storage directory |
 
-## スラッシュコマンド
+## Slash Commands
 
-| コマンド | 説明 |
-|----------|------|
-| `/new` | 新しいセッションを開始 |
-| `/stop` | 実行中のタスクを停止 |
-| `/skills` | 利用可能なスキル一覧 |
-| `/skill <name> [args]` | スキルを実行 |
-| `/schedule add <input>` | スケジュール追加（例: `毎日 9:00 おはよう`） |
-| `/schedule list` | スケジュール一覧 |
-| `/schedule remove <id>` | スケジュール削除 |
+| Command | Description |
+|---------|-------------|
+| `/new` | Start a new session |
+| `/stop` | Stop the running task |
+| `/skills` | List available skills |
+| `/skill <name> [args]` | Run a skill |
+| `/memory show` | Show memory summary |
+| `/memory remember <content>` | Save to long-term memory |
+| `/memory search <keyword>` | Search memory |
+| `/memory clear` | Clear long-term memory |
+| `/schedule add <input>` | Add a schedule |
+| `/schedule list` | List schedules |
+| `/schedule remove <id>` | Remove a schedule |
 
-## スケジュール入力フォーマット
+## SOUL.md
 
-- `毎日 9:00 おはよう` → 毎日 9:00 に実行
-- `毎時 チェック` → 毎時 0 分に実行
-- `毎週月曜 9:00 週次レビュー` → 毎週月曜に実行
-- `30分後 リマインド` → 30 分後に一度だけ実行
-- `15:00 ミーティング` → 今日の 15:00（過ぎていたら明日）
-- `cron 0 9 * * * おはよう` → cron 式を直接指定
+`SOUL.md` in the project root defines the bot's personality. Edit it to customize how Sensei behaves — its tone, priorities, and boundaries.
 
-## スキル
+## Memory
 
-`skills/` ディレクトリに SKILL.md ファイルを配置すると、自動的にスラッシュコマンドとして登録されます。
+Sensei maintains persistent memory as plain Markdown files in the data directory:
+
+- **`memory/MEMORY.md`** — Long-term memory (preferences, project info, decisions)
+- **`memory/YYYY-MM-DD.md`** — Daily logs (conversation highlights, task progress)
+
+Memory is automatically included in the system prompt and can be managed via `/memory` commands or natural language ("remember this", "forget that").
+
+## Skills
+
+Drop a `SKILL.md` file into `skills/<name>/SKILL.md` to register it as a slash command:
 
 ```markdown
 ---
 name: today
-description: 今日の学習計画を確認する
+description: Review today's learning plan
 ---
-# Today スキル
+# Today Skill
 ...
 ```
 
-## テスト
+## Schedule Input Formats
+
+Supports Japanese natural language and cron expressions:
+
+- `cron 0 9 * * *` — Direct cron expression
+- `毎日 9:00 message` — Daily at 9:00
+- `毎時 message` — Every hour
+- `毎週月曜 9:00 message` — Weekly on Monday
+- `30分後 message` — 30 minutes from now
+- `15:00 message` — Today at 15:00 (or tomorrow if past)
+
+## Testing
 
 ```bash
 npm test
 ```
 
-## ライセンス
+## License
 
 MIT
