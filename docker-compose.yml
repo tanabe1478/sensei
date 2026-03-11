@@ -1,0 +1,12 @@
+services:
+  sensei:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - sensei-data:/app/.sensei
+      - ./skills:/app/skills:ro
+      - ./workspace:/app/workspace
+
+volumes:
+  sensei-data:
