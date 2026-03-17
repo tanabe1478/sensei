@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import type { ConversationMessage } from './types.js';
 
@@ -52,6 +52,25 @@ export class ConversationStore {
       timestamp: new Date().toISOString(),
     };
     this.writeAll(channelId, [summaryMessage, ...recentMessages]);
+  }
+
+  saveLastSummary(channelId: string, summary: string): void {
+    const filePath = join(this.dir, `${channelId}.last-summary.txt`);
+    writeFileSync(filePath, summary, 'utf-8');
+  }
+
+  getLastSummary(channelId: string): string | null {
+    const filePath = join(this.dir, `${channelId}.last-summary.txt`);
+    if (!existsSync(filePath)) return null;
+    const content = readFileSync(filePath, 'utf-8');
+    return content || null;
+  }
+
+  clearLastSummary(channelId: string): void {
+    const filePath = join(this.dir, `${channelId}.last-summary.txt`);
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
   }
 
   private filePath(channelId: string): string {

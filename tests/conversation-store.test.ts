@@ -118,4 +118,27 @@ describe('ConversationStore', () => {
     expect(() => new Date(messages[0].timestamp)).not.toThrow();
     expect(new Date(messages[0].timestamp).toISOString()).toBe(messages[0].timestamp);
   });
+
+  describe('last summary (日またぎ継続)', () => {
+    it('saveLastSummary で要約を退避し getLastSummary で取得できる', () => {
+      const store = new ConversationStore(tmpDir);
+      store.saveLastSummary('ch-1', '前回の要約テキスト');
+
+      const summary = store.getLastSummary('ch-1');
+      expect(summary).toBe('前回の要約テキスト');
+    });
+
+    it('getLastSummary は存在しない場合 null を返す', () => {
+      const store = new ConversationStore(tmpDir);
+      expect(store.getLastSummary('ch-nonexistent')).toBeNull();
+    });
+
+    it('clearLastSummary で退避された要約を削除できる', () => {
+      const store = new ConversationStore(tmpDir);
+      store.saveLastSummary('ch-1', '要約');
+      store.clearLastSummary('ch-1');
+
+      expect(store.getLastSummary('ch-1')).toBeNull();
+    });
+  });
 });

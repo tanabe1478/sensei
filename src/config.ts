@@ -29,6 +29,7 @@ export interface Config {
   readonly conversation: {
     readonly tokenBudget: number;
     readonly compactionModel: string;
+    readonly idleMinutes: number;
   };
   readonly dataDir: string;
 }
@@ -83,6 +84,9 @@ export function loadConfig(): Config {
         ? parseInt(process.env.CONVERSATION_TOKEN_BUDGET, 10)
         : 4000,
       compactionModel: process.env.CONVERSATION_COMPACTION_MODEL || 'gpt-4o-mini',
+      idleMinutes: process.env.CONVERSATION_IDLE_MINUTES
+        ? parseInt(process.env.CONVERSATION_IDLE_MINUTES, 10)
+        : 60,
     },
     dataDir,
   };
