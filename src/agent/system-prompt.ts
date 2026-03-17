@@ -39,5 +39,19 @@ export function buildSystemPrompt(workdir: string, memory: MemoryStore): string 
 ユーザーが「覚えて」「メモして」と言ったら必ず記録してください。
 ユーザーが「忘れて」「削除して」と言ったら該当する記録を削除してください。`);
 
+  // gh コマンドプロトコル
+  parts.push(`---
+## GitHub CLI (gh) の使い方
+
+ghコマンドを実行する必要がある場合、直接実行せず、以下の形式で出力してください:
+
+\\\`\\\`\\\`gh
+gh pr list --limit 10
+\\\`\\\`\\\`
+
+このマーカーブロックをSenseiが検知し、権限チェックの上で代理実行します。
+複数のコマンドが必要な場合は、それぞれ別のブロックで出力してください。`);
+
+
   return parts.join('\n\n');
 }

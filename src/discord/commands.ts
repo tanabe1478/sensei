@@ -61,6 +61,29 @@ export function buildCoreCommands(): ReturnType<SlashCommandBuilder['toJSON']>[]
       )
       .addSubcommand((sub) => sub.setName('clear').setDescription('長期記憶をクリア'))
       .toJSON(),
+    new SlashCommandBuilder()
+      .setName('gh')
+      .setDescription('GitHub CLI管理')
+      .addSubcommand((sub) =>
+        sub
+          .setName('add')
+          .setDescription('Allowlistにパターンを追加')
+          .addStringOption((opt) =>
+            opt.setName('pattern').setDescription('例: "pr list", "pr *"').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('remove')
+          .setDescription('Allowlistからパターンを削除')
+          .addStringOption((opt) =>
+            opt.setName('pattern').setDescription('削除するパターン').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) => sub.setName('list').setDescription('Allowlist一覧'))
+      .addSubcommand((sub) => sub.setName('audit').setDescription('最近の監査ログ'))
+      .addSubcommand((sub) => sub.setName('security').setDescription('セキュリティレベル表示'))
+      .toJSON(),
   ];
 }
 
