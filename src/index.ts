@@ -3,6 +3,9 @@ import { CodexRunner } from './agent/codex.js';
 import { SessionStore } from './session/store.js';
 import { Scheduler } from './scheduler/scheduler.js';
 import { MemoryStore } from './memory/store.js';
+import { GhHandler } from './gh/handler.js';
+import { ConversationStore } from './conversation/store.js';
+import { ContextManager } from './conversation/context-manager.js';
 import { startBot } from './discord/bot.js';
 
 async function main(): Promise<void> {
@@ -22,8 +25,24 @@ async function main(): Promise<void> {
 
   const sessions = new SessionStore(config.dataDir);
   const scheduler = new Scheduler(config.dataDir);
+  const ghHandler = new GhHandler({
+    dataDir: config.dataDir,
+    securityLevel: config.gh.securityLevel,
+    timeoutMs: config.gh.timeoutMs,
+  });
 
-  await startBot({ config, agent, sessions, scheduler, memory });
+  const conversationStore = new ConversationStore(config.dataDir);
+
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  const contextManager = openaiApiKey
+    ? new ContextManager(conversationStore, {
+        tokenBudget: config.conversation.tokenBudget,
+        compactionModel: config.conversation.compactionModel,
+        openaiApiKey,
+      })
+    : undefined;
+
+  await startBot({ config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager });
 }
 
 main().catch((err) => {

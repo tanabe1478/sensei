@@ -38,11 +38,14 @@ export class CodexRunner implements AgentRunner {
       args.splice(1, 0, 'resume', '--session-id', options.sessionId);
     }
 
-    // SOUL.md + メモリを含むシステムプロンプトを構築
+    // SOUL.md + メモリ + 会話履歴を含むプロンプトを構築
     let fullPrompt = prompt;
     if (this.config.memory && this.config.workdir) {
       const systemPrompt = buildSystemPrompt(this.config.workdir, this.config.memory);
-      fullPrompt = `${systemPrompt}\n\n---\n## ユーザーの入力\n${prompt}`;
+      const historySection = options?.conversationHistory
+        ? `\n\n${options.conversationHistory}\n`
+        : '';
+      fullPrompt = `${systemPrompt}${historySection}\n\n---\n## ユーザーの入力\n${prompt}`;
     }
 
     args.push(fullPrompt);

@@ -9,6 +9,7 @@ export interface AgentRunOptions {
   readonly sessionId?: string;
   readonly channelId?: string;
   readonly timeoutMs?: number;
+  readonly conversationHistory?: string;
 }
 
 /** エージェントランナーのインターフェース */
