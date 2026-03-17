@@ -22,6 +22,14 @@ export interface Config {
     readonly defaultProject: string;
     readonly reviewNotifyChannel?: string;
   };
+  readonly gh: {
+    readonly securityLevel: 'deny' | 'allowlist' | 'full';
+    readonly timeoutMs: number;
+  };
+  readonly conversation: {
+    readonly tokenBudget: number;
+    readonly compactionModel: string;
+  };
   readonly dataDir: string;
 }
 
@@ -64,6 +72,17 @@ export function loadConfig(): Config {
       workspacePath: process.env.LEARNING_WORKSPACE_PATH || join(workdir, 'workspace'),
       defaultProject: process.env.DEFAULT_PROJECT || 'default',
       reviewNotifyChannel: process.env.REVIEW_NOTIFY_CHANNEL || undefined,
+    },
+    gh: {
+      securityLevel:
+        (process.env.GH_SECURITY_LEVEL as 'deny' | 'allowlist' | 'full') || 'allowlist',
+      timeoutMs: process.env.GH_TIMEOUT_MS ? parseInt(process.env.GH_TIMEOUT_MS, 10) : 30_000,
+    },
+    conversation: {
+      tokenBudget: process.env.CONVERSATION_TOKEN_BUDGET
+        ? parseInt(process.env.CONVERSATION_TOKEN_BUDGET, 10)
+        : 4000,
+      compactionModel: process.env.CONVERSATION_COMPACTION_MODEL || 'gpt-4o-mini',
     },
     dataDir,
   };

@@ -5,7 +5,6 @@ import {
   REST,
   Routes,
   type ChatInputCommandInteraction,
-  type Message,
 } from 'discord.js';
 import type { AgentRunner } from '../agent/types.js';
 import type { Config } from '../config.js';
@@ -17,6 +16,9 @@ import { Scheduler } from '../scheduler/scheduler.js';
 import { parseScheduleInput } from '../scheduler/parser.js';
 import { readFileSync } from 'fs';
 import { MemoryStore } from '../memory/store.js';
+import { GhHandler } from '../gh/handler.js';
+import type { ConversationStore } from '../conversation/store.js';
+import type { ContextManager } from '../conversation/context-manager.js';
 
 interface BotDeps {
   readonly config: Config;
@@ -24,10 +26,13 @@ interface BotDeps {
   readonly sessions: SessionStore;
   readonly scheduler: Scheduler;
   readonly memory?: MemoryStore;
+  readonly ghHandler?: GhHandler;
+  readonly conversationStore?: ConversationStore;
+  readonly contextManager?: ContextManager;
 }
 
 export async function startBot(deps: BotDeps): Promise<void> {
-  const { config, agent, sessions, scheduler, memory } = deps;
+  const { config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager } = deps;
   const skills: Skill[] = loadSkills(config.agent.workdir);
   console.log(`[sensei] Loaded ${skills.length} skills`);
 
@@ -72,7 +77,7 @@ export async function startBot(deps: BotDeps): Promise<void> {
     }
 
     try {
-      await handleCommand(interaction, { config, agent, sessions, scheduler, memory, skills });
+      await handleCommand(interaction, { config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager, skills });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (interaction.deferred || interaction.replied) {
@@ -97,12 +102,42 @@ export async function startBot(deps: BotDeps): Promise<void> {
 
     await message.channel.sendTyping();
 
+    // 会話履歴をコンテキストとして取得
+    let conversationHistory: string | undefined;
+    if (contextManager) {
+      try {
+        conversationHistory = await contextManager.buildHistory(message.channelId) || undefined;
+      } catch (err) {
+        console.error('[sensei] Failed to build conversation history:', err);
+      }
+    }
+
     const sessionId = sessions.get(message.channelId);
-    const result = await agent.run(prompt, { sessionId, channelId: message.channelId });
+    const result = await agent.run(prompt, { sessionId, channelId: message.channelId, conversationHistory });
     sessions.set(message.channelId, result.sessionId);
+
+    // 会話を永続化
+    if (conversationStore) {
+      conversationStore.append(message.channelId, 'user', prompt);
+      conversationStore.append(message.channelId, 'assistant', result.result);
+    }
 
     for (const chunk of splitMessage(result.result)) {
       await message.channel.send(chunk);
+    }
+
+    // gh コマンドの後処理
+    if (ghHandler) {
+      const ghResults = await ghHandler.processAgentOutput(result.result, message.channelId);
+      for (const ghResult of ghResults) {
+        const label =
+          ghResult.decision === 'allowed' || ghResult.decision === 'confirmed'
+            ? `\`${ghResult.command.raw}\` の結果:`
+            : `\`${ghResult.command.raw}\`:`;
+        for (const chunk of splitMessage(`${label}\n${ghResult.output}`)) {
+          await message.channel.send(chunk);
+        }
+      }
     }
   });
 
@@ -111,19 +146,21 @@ export async function startBot(deps: BotDeps): Promise<void> {
 
 interface CommandContext extends BotDeps {
   readonly skills: readonly Skill[];
+  readonly ghHandler?: GhHandler;
 }
 
 async function handleCommand(
   interaction: ChatInputCommandInteraction,
   ctx: CommandContext,
 ): Promise<void> {
-  const { agent, sessions, scheduler, memory, skills } = ctx;
+  const { agent, sessions, scheduler, memory, ghHandler, conversationStore, skills } = ctx;
   const channelId = interaction.channelId;
 
   switch (interaction.commandName) {
     case 'new':
       sessions.delete(channelId);
       agent.destroy(channelId);
+      conversationStore?.clear(channelId);
       await interaction.reply('新しいセッションを開始しました');
       return;
 
@@ -220,6 +257,47 @@ async function handleCommand(
           await interaction.reply(`スケジュール ${id} を削除しました`);
         } else {
           await interaction.reply({ content: '指定された ID が見つかりません', ephemeral: true });
+        }
+      }
+      return;
+    }
+
+    case 'gh': {
+      if (!ghHandler) {
+        await interaction.reply({ content: 'gh機能が初期化されていません', ephemeral: true });
+        return;
+      }
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'security') {
+        await interaction.reply(`セキュリティレベル: **${ctx.config.gh.securityLevel}**`);
+      } else if (sub === 'audit') {
+        const entries = ghHandler.audit.recent(10);
+        if (entries.length === 0) {
+          await interaction.reply('監査ログはありません');
+        } else {
+          const lines = entries.map(
+            (e) => `\`${e.command}\` [${e.riskLevel}] → ${e.decision} (${e.timestamp})`,
+          );
+          await interaction.reply(lines.join('\n').slice(0, 1900));
+        }
+      } else if (sub === 'add') {
+        const pattern = interaction.options.getString('pattern', true);
+        ghHandler.allowlist.add(pattern);
+        await interaction.reply(`Allowlistに追加: \`${pattern}\``);
+      } else if (sub === 'remove') {
+        const pattern = interaction.options.getString('pattern', true);
+        if (ghHandler.allowlist.remove(pattern)) {
+          await interaction.reply(`Allowlistから削除: \`${pattern}\``);
+        } else {
+          await interaction.reply({ content: `パターン "${pattern}" が見つかりません`, ephemeral: true });
+        }
+      } else if (sub === 'list') {
+        const entries = ghHandler.allowlist.list();
+        if (entries.length === 0) {
+          await interaction.reply('Allowlistは空です');
+        } else {
+          const lines = entries.map((e) => `\`${e.pattern}\` (追加: ${e.addedAt})`);
+          await interaction.reply(lines.join('\n'));
         }
       }
       return;
