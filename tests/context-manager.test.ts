@@ -102,6 +102,24 @@ describe('ContextManager', () => {
       expect(messages[0].role).toBe('summary');
       expect(messages[0].content).toBe('要約テキスト');
     });
+
+    it('APIキーなしで予算超過時は compaction せず直近メッセージを返す', async () => {
+      const manager = new ContextManager(store, { tokenBudget: 50, compactionModel: 'gpt-4o-mini' });
+
+      for (let i = 0; i < 20; i++) {
+        store.append('ch-1', 'user', `質問${i}: これは長めのメッセージです。テスト用に文字数を増やしています。`);
+        store.append('ch-1', 'assistant', `回答${i}: こちらも長めの応答です。コンテキストの予算を超過させるためです。`);
+      }
+
+      const history = await manager.buildHistory('ch-1');
+
+      // compaction されず直近5ターンだけ返る
+      expect(history).toContain('質問19');
+      expect(history).toContain('回答19');
+      expect(history).not.toContain('要約');
+      // ストアは変更されていない（compaction未実行）
+      expect(store.getAll('ch-1')).toHaveLength(40);
+    });
   });
 
   describe('formatHistory', () => {

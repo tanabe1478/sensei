@@ -33,14 +33,11 @@ async function main(): Promise<void> {
 
   const conversationStore = new ConversationStore(config.dataDir);
 
-  const openaiApiKey = process.env.OPENAI_API_KEY;
-  const contextManager = openaiApiKey
-    ? new ContextManager(conversationStore, {
-        tokenBudget: config.conversation.tokenBudget,
-        compactionModel: config.conversation.compactionModel,
-        openaiApiKey,
-      })
-    : undefined;
+  const contextManager = new ContextManager(conversationStore, {
+    tokenBudget: config.conversation.tokenBudget,
+    compactionModel: config.conversation.compactionModel,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+  });
 
   await startBot({ config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager });
 }

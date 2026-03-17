@@ -7,7 +7,7 @@ const PROTECTED_MESSAGES = PROTECTED_TURNS * 2;
 export interface ContextManagerConfig {
   readonly tokenBudget: number;
   readonly compactionModel: string;
-  readonly openaiApiKey: string;
+  readonly openaiApiKey?: string;
 }
 
 export class ContextManager {
@@ -39,6 +39,11 @@ export class ContextManager {
 
     if (old.length === 0) {
       return this.formatHistory(messages);
+    }
+
+    // APIキーがなければ compaction せず直近メッセージのみ返す
+    if (!this.config.openaiApiKey) {
+      return this.formatHistory(recent);
     }
 
     const summary = await this.compactMessages(old);
