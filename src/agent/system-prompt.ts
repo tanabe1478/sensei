@@ -1,9 +1,10 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { MemoryStore } from '../memory/store.js';
+import type { GhTokenStore } from '../gh/token/store.js';
 
 /** SOUL.md とメモリを統合したシステムプロンプトを構築する */
-export function buildSystemPrompt(workdir: string, memory: MemoryStore): string {
+export function buildSystemPrompt(workdir: string, memory: MemoryStore, tokenStore?: GhTokenStore): string {
   const parts: string[] = [];
 
   // SOUL.md を読み込む
@@ -52,6 +53,24 @@ gh pr list --limit 10
 このマーカーブロックをSenseiが検知し、権限チェックの上で代理実行します。
 複数のコマンドが必要な場合は、それぞれ別のブロックで出力してください。`);
 
+  // トークンで利用可能なリポジトリ情報を注入
+  if (tokenStore) {
+    const entries = tokenStore.list();
+    if (entries.length > 0) {
+      const repoLines = entries.map((e) => {
+        const repos = e.repositories.join(', ');
+        const scopes = e.scopes.join(', ');
+        const defaultMark = e.isDefault ? ' [デフォルト]' : '';
+        return `- **${e.label}**${defaultMark}: ${repos} (${scopes})`;
+      });
+      parts.push(`---
+## 利用可能なGitHubリポジトリ
+
+以下のリポジトリにアクセスできます。\`--repo owner/repo\` フラグを使って対象リポジトリを指定してください。
+
+${repoLines.join('\n')}`);
+    }
+  }
 
   return parts.join('\n\n');
 }

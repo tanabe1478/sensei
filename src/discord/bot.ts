@@ -17,6 +17,8 @@ import { parseScheduleInput } from '../scheduler/parser.js';
 import { readFileSync } from 'fs';
 import { MemoryStore } from '../memory/store.js';
 import { GhHandler } from '../gh/handler.js';
+import type { GhTokenStore } from '../gh/token/store.js';
+import { GH_TOKEN_COLLECT_TIMEOUT_MS } from '../constants.js';
 import type { ConversationStore } from '../conversation/store.js';
 import type { ContextManager } from '../conversation/context-manager.js';
 
@@ -27,12 +29,13 @@ interface BotDeps {
   readonly scheduler: Scheduler;
   readonly memory?: MemoryStore;
   readonly ghHandler?: GhHandler;
+  readonly tokenStore?: GhTokenStore;
   readonly conversationStore?: ConversationStore;
   readonly contextManager?: ContextManager;
 }
 
 export async function startBot(deps: BotDeps): Promise<void> {
-  const { config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager } = deps;
+  const { config, agent, sessions, scheduler, memory, ghHandler, tokenStore, conversationStore, contextManager } = deps;
   const skills: Skill[] = loadSkills(config.agent.workdir);
   console.log(`[sensei] Loaded ${skills.length} skills`);
 
@@ -77,7 +80,7 @@ export async function startBot(deps: BotDeps): Promise<void> {
     }
 
     try {
-      await handleCommand(interaction, { config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager, skills });
+      await handleCommand(interaction, { config, agent, sessions, scheduler, memory, ghHandler, tokenStore, conversationStore, contextManager, skills });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (interaction.deferred || interaction.replied) {
@@ -147,13 +150,14 @@ export async function startBot(deps: BotDeps): Promise<void> {
 interface CommandContext extends BotDeps {
   readonly skills: readonly Skill[];
   readonly ghHandler?: GhHandler;
+  readonly tokenStore?: GhTokenStore;
 }
 
 async function handleCommand(
   interaction: ChatInputCommandInteraction,
   ctx: CommandContext,
 ): Promise<void> {
-  const { agent, sessions, scheduler, memory, ghHandler, conversationStore, skills } = ctx;
+  const { agent, sessions, scheduler, memory, ghHandler, tokenStore, conversationStore, skills } = ctx;
   const channelId = interaction.channelId;
 
   switch (interaction.commandName) {
@@ -298,6 +302,170 @@ async function handleCommand(
         } else {
           const lines = entries.map((e) => `\`${e.pattern}\` (追加: ${e.addedAt})`);
           await interaction.reply(lines.join('\n'));
+        }
+      }
+      return;
+    }
+
+    case 'gh-token': {
+      if (!tokenStore) {
+        await interaction.reply({ content: 'トークン管理が初期化されていません', ephemeral: true });
+        return;
+      }
+      const sub = interaction.options.getSubcommand();
+
+      if (sub === 'add') {
+        const label = interaction.options.getString('label', true);
+        const repos = interaction.options.getString('repos', true).split(',').map((s) => s.trim()).filter(Boolean);
+        const scopes = interaction.options.getString('scopes', true).split(',').map((s) => s.trim()).filter(Boolean);
+        const expires = interaction.options.getString('expires') || undefined;
+
+        await interaction.reply({
+          content: `トークンを入力してください (${GH_TOKEN_COLLECT_TIMEOUT_MS / 1000}秒以内):\n> メッセージは自動的に削除されます`,
+          ephemeral: true,
+        });
+
+        const channel = interaction.channel;
+        if (!channel || !('awaitMessages' in channel)) {
+          await interaction.editReply('このチャンネルではトークン入力ができません');
+          return;
+        }
+
+        try {
+          const collected = await channel.awaitMessages({
+            filter: (m) => m.author.id === interaction.user.id,
+            max: 1,
+            time: GH_TOKEN_COLLECT_TIMEOUT_MS,
+            errors: ['time'],
+          });
+
+          const tokenMsg = collected.first();
+          if (!tokenMsg) {
+            await interaction.editReply('トークンの入力がタイムアウトしました');
+            return;
+          }
+
+          const tokenValue = tokenMsg.content.trim();
+          await tokenMsg.delete().catch(() => {});
+
+          const entry = tokenStore.add({
+            label,
+            token: tokenValue,
+            repositories: repos,
+            scopes,
+            expiresAt: expires,
+          });
+
+          await interaction.editReply(
+            `トークンを追加しました:\n` +
+            `- **ラベル**: ${entry.label}\n` +
+            `- **ID**: \`${entry.id}\`\n` +
+            `- **リポジトリ**: ${entry.repositories.join(', ')}\n` +
+            `- **スコープ**: ${entry.scopes.join(', ')}\n` +
+            `- **デフォルト**: ${entry.isDefault ? 'はい' : 'いいえ'}` +
+            (entry.expiresAt ? `\n- **有効期限**: ${entry.expiresAt}` : ''),
+          );
+        } catch {
+          await interaction.editReply('トークンの入力がタイムアウトしました');
+        }
+      } else if (sub === 'list') {
+        const entries = tokenStore.list();
+        if (entries.length === 0) {
+          await interaction.reply({ content: '登録されたトークンはありません', ephemeral: true });
+        } else {
+          const lines = entries.map((e) =>
+            `${e.isDefault ? '**[DEFAULT]** ' : ''}**${e.label}** (\`${e.id.slice(0, 8)}...\`)\n` +
+            `  リポジトリ: ${e.repositories.join(', ')}\n` +
+            `  スコープ: ${e.scopes.join(', ')}` +
+            (e.expiresAt ? `\n  有効期限: ${e.expiresAt}` : '') +
+            (e.lastUsedAt ? `\n  最終使用: ${e.lastUsedAt}` : ''),
+          );
+          await interaction.reply({ content: lines.join('\n\n').slice(0, 1900), ephemeral: true });
+        }
+      } else if (sub === 'remove') {
+        const id = interaction.options.getString('id', true);
+        if (tokenStore.remove(id)) {
+          await interaction.reply({ content: `トークン \`${id.slice(0, 8)}...\` を削除しました`, ephemeral: true });
+        } else {
+          await interaction.reply({ content: '指定されたIDが見つかりません', ephemeral: true });
+        }
+      } else if (sub === 'rotate') {
+        const id = interaction.options.getString('id', true);
+        await interaction.reply({
+          content: `新しいトークンを入力してください (${GH_TOKEN_COLLECT_TIMEOUT_MS / 1000}秒以内):`,
+          ephemeral: true,
+        });
+
+        const channel = interaction.channel;
+        if (!channel || !('awaitMessages' in channel)) {
+          await interaction.editReply('このチャンネルではトークン入力ができません');
+          return;
+        }
+
+        try {
+          const collected = await channel.awaitMessages({
+            filter: (m) => m.author.id === interaction.user.id,
+            max: 1,
+            time: GH_TOKEN_COLLECT_TIMEOUT_MS,
+            errors: ['time'],
+          });
+
+          const tokenMsg = collected.first();
+          if (!tokenMsg) {
+            await interaction.editReply('タイムアウトしました');
+            return;
+          }
+
+          const newToken = tokenMsg.content.trim();
+          await tokenMsg.delete().catch(() => {});
+
+          if (tokenStore.rotate(id, newToken)) {
+            await interaction.editReply(`トークン \`${id.slice(0, 8)}...\` をローテーションしました`);
+          } else {
+            await interaction.editReply('指定されたIDが見つかりません');
+          }
+        } catch {
+          await interaction.editReply('タイムアウトしました');
+        }
+      } else if (sub === 'test') {
+        const repo = interaction.options.getString('repo', true);
+        await interaction.deferReply({ ephemeral: true });
+
+        const result = tokenStore.getTokenForRepo(repo);
+        if (!result) {
+          await interaction.editReply(`リポジトリ \`${repo}\` に対応するトークンが見つかりません`);
+          return;
+        }
+
+        // 実際にgh api を呼んでテスト
+        try {
+          const { executeGhCommand } = await import('../gh/executor.js');
+          const testCmd = {
+            raw: `gh api repos/${repo}`,
+            subcommand: 'api',
+            action: '',
+            args: [`repos/${repo}`],
+            riskLevel: 'safe' as const,
+          };
+          const execResult = await executeGhCommand(testCmd, 10_000, { GH_TOKEN: result.token });
+          if (execResult.exitCode === 0) {
+            await interaction.editReply(
+              `トークン **${result.entry.label}** でリポジトリ \`${repo}\` にアクセスできました`,
+            );
+          } else {
+            await interaction.editReply(
+              `トークン **${result.entry.label}** でのアクセスに失敗:\n\`\`\`\n${execResult.stderr.slice(0, 500)}\n\`\`\``,
+            );
+          }
+        } catch (err) {
+          await interaction.editReply(`テスト実行エラー: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      } else if (sub === 'default') {
+        const id = interaction.options.getString('id', true);
+        if (tokenStore.setDefault(id)) {
+          await interaction.reply({ content: `デフォルトトークンを設定しました`, ephemeral: true });
+        } else {
+          await interaction.reply({ content: '指定されたIDが見つかりません', ephemeral: true });
         }
       }
       return;

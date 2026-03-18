@@ -6,6 +6,7 @@ const DEFAULT_GH_TIMEOUT_MS = 30_000;
 export async function executeGhCommand(
   cmd: GhCommand,
   timeoutMs: number = DEFAULT_GH_TIMEOUT_MS,
+  env?: Record<string, string>,
 ): Promise<GhExecutionResult> {
   // raw は "gh pr list ..." の形式なので、"gh" を除いた部分を args に
   const parts = cmd.raw.split(/\s+/);
@@ -16,6 +17,7 @@ export async function executeGhCommand(
     command,
     args,
     timeoutMs,
+    env,
   });
 
   return promise;

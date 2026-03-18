@@ -25,6 +25,7 @@ export interface Config {
   readonly gh: {
     readonly securityLevel: 'deny' | 'allowlist' | 'full';
     readonly timeoutMs: number;
+    readonly encryptionKey: string;
   };
   readonly conversation: {
     readonly tokenBudget: number;
@@ -78,6 +79,7 @@ export function loadConfig(): Config {
       securityLevel:
         (process.env.GH_SECURITY_LEVEL as 'deny' | 'allowlist' | 'full') || 'allowlist',
       timeoutMs: process.env.GH_TIMEOUT_MS ? parseInt(process.env.GH_TIMEOUT_MS, 10) : 30_000,
+      encryptionKey: process.env.GH_TOKEN_ENCRYPTION_KEY || discordToken,
     },
     conversation: {
       tokenBudget: process.env.CONVERSATION_TOKEN_BUDGET

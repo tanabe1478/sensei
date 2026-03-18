@@ -4,6 +4,7 @@ import { SessionStore } from './session/store.js';
 import { Scheduler } from './scheduler/scheduler.js';
 import { MemoryStore } from './memory/store.js';
 import { GhHandler } from './gh/handler.js';
+import { GhTokenStore } from './gh/token/store.js';
 import { ConversationStore } from './conversation/store.js';
 import { ContextManager } from './conversation/context-manager.js';
 import { startBot } from './discord/bot.js';
@@ -25,10 +26,12 @@ async function main(): Promise<void> {
 
   const sessions = new SessionStore(config.dataDir);
   const scheduler = new Scheduler(config.dataDir);
+  const tokenStore = new GhTokenStore(config.dataDir, config.gh.encryptionKey);
   const ghHandler = new GhHandler({
     dataDir: config.dataDir,
     securityLevel: config.gh.securityLevel,
     timeoutMs: config.gh.timeoutMs,
+    tokenStore,
   });
 
   const conversationStore = new ConversationStore(config.dataDir);
@@ -40,7 +43,7 @@ async function main(): Promise<void> {
     idleMinutes: config.conversation.idleMinutes,
   });
 
-  await startBot({ config, agent, sessions, scheduler, memory, ghHandler, conversationStore, contextManager });
+  await startBot({ config, agent, sessions, scheduler, memory, ghHandler, tokenStore, conversationStore, contextManager });
 }
 
 main().catch((err) => {

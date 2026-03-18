@@ -15,3 +15,6 @@ export const STREAM_UPDATE_INTERVAL_MS = 1500;
 
 /** sensei のデータディレクトリ名 */
 export const DATA_DIR_NAME = '.sensei';
+
+/** gh-tokenコマンドでトークン入力を待つタイムアウト (30秒) */
+export const GH_TOKEN_COLLECT_TIMEOUT_MS = 30_000;

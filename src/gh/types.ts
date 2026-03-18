@@ -20,6 +20,7 @@ export interface GhAuditEntry {
   readonly channelId: string;
   readonly executionMs?: number;
   readonly exitCode?: number | null;
+  readonly tokenLabel?: string;
 }
 
 export interface GhAllowlistEntry {

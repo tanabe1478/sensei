@@ -4,13 +4,16 @@ import { GhPolicy } from './policy.js';
 import { GhAllowlistStore } from './store.js';
 import { GhAuditLog } from './audit.js';
 import { executeGhCommand } from './executor.js';
+import type { GhTokenStore } from './token/store.js';
+import { GhTokenResolver } from './token/resolver.js';
 
 export interface GhHandlerOptions {
   readonly dataDir: string;
   readonly securityLevel: GhSecurityLevel;
   readonly timeoutMs: number;
-  readonly executeFn?: (cmd: GhCommand, timeoutMs: number) => Promise<GhExecutionResult>;
+  readonly executeFn?: (cmd: GhCommand, timeoutMs: number, env?: Record<string, string>) => Promise<GhExecutionResult>;
   readonly confirmFn?: (cmd: GhCommand, channelId: string) => Promise<boolean>;
+  readonly tokenStore?: GhTokenStore;
 }
 
 export interface GhHandlerResult {
@@ -24,8 +27,10 @@ export class GhHandler {
   readonly audit: GhAuditLog;
   private readonly policy: GhPolicy;
   private readonly timeoutMs: number;
-  private readonly executeFn: (cmd: GhCommand, timeoutMs: number) => Promise<GhExecutionResult>;
+  private readonly executeFn: (cmd: GhCommand, timeoutMs: number, env?: Record<string, string>) => Promise<GhExecutionResult>;
   private readonly confirmFn?: (cmd: GhCommand, channelId: string) => Promise<boolean>;
+  private readonly tokenResolver?: GhTokenResolver;
+  private readonly tokenStore?: GhTokenStore;
 
   constructor(options: GhHandlerOptions) {
     this.allowlist = new GhAllowlistStore(options.dataDir);
@@ -34,6 +39,8 @@ export class GhHandler {
     this.timeoutMs = options.timeoutMs;
     this.executeFn = options.executeFn ?? executeGhCommand;
     this.confirmFn = options.confirmFn;
+    this.tokenStore = options.tokenStore;
+    this.tokenResolver = options.tokenStore ? new GhTokenResolver(options.tokenStore) : undefined;
   }
 
   async processAgentOutput(text: string, channelId: string): Promise<GhHandlerResult[]> {
@@ -76,13 +83,34 @@ export class GhHandler {
       }
     }
 
+    // Resolve token
+    let env: Record<string, string> | undefined;
+    let tokenLabel: string | undefined;
+
+    if (this.tokenResolver) {
+      const resolved = this.tokenResolver.resolve(cmd);
+      if (resolved) {
+        env = { GH_TOKEN: resolved.token };
+        tokenLabel = resolved.entry.label;
+      }
+    }
+
     // Execute
     try {
-      const result = await this.executeFn(cmd, this.timeoutMs);
+      const result = await this.executeFn(cmd, this.timeoutMs, env);
       const executionMs = Date.now() - startMs;
       const decision: GhDecision = policyDecision === 'confirm' ? 'confirmed' : 'allowed';
 
-      this.logAudit(cmd, decision, channelId, executionMs, result.exitCode);
+      this.logAudit(cmd, decision, channelId, executionMs, result.exitCode, tokenLabel);
+
+      // Update lastUsedAt
+      if (tokenLabel && this.tokenResolver && this.tokenStore) {
+        const entries = this.tokenStore.list();
+        const entry = entries.find((e) => e.label === tokenLabel);
+        if (entry) {
+          this.tokenStore.updateLastUsedAt(entry.id);
+        }
+      }
 
       const output =
         result.exitCode === 0
@@ -93,7 +121,7 @@ export class GhHandler {
     } catch (err) {
       const executionMs = Date.now() - startMs;
       const decision: GhDecision = policyDecision === 'confirm' ? 'confirmed' : 'allowed';
-      this.logAudit(cmd, decision, channelId, executionMs);
+      this.logAudit(cmd, decision, channelId, executionMs, undefined, tokenLabel);
 
       return {
         command: cmd,
@@ -125,6 +153,7 @@ export class GhHandler {
     channelId: string,
     executionMs?: number,
     exitCode?: number | null,
+    tokenLabel?: string,
   ): void {
     this.audit.log({
       timestamp: new Date().toISOString(),
@@ -134,6 +163,7 @@ export class GhHandler {
       channelId,
       executionMs,
       exitCode,
+      tokenLabel,
     });
   }
 }

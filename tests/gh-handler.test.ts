@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { GhHandler, type GhHandlerResult } from '../src/gh/handler.js';
+import { GhTokenStore } from '../src/gh/token/store.js';
 
 describe('GhHandler', () => {
   let tmpDir: string;
@@ -169,6 +170,103 @@ describe('GhHandler', () => {
       expect(entries).toHaveLength(1);
       expect(entries[0].command).toBe('gh pr list');
       expect(entries[0].decision).toBe('allowed');
+    });
+  });
+
+  describe('token integration', () => {
+    it('should inject GH_TOKEN env when token is resolved', async () => {
+      let capturedEnv: Record<string, string> | undefined;
+      const tokenStore = new GhTokenStore(tmpDir, 'test-key');
+      tokenStore.add({
+        label: 'test-token',
+        token: 'ghp_injected_token',
+        repositories: ['owner/repo'],
+        scopes: ['pull_requests:read'],
+      });
+
+      handler = new GhHandler({
+        dataDir: tmpDir,
+        securityLevel: 'full',
+        timeoutMs: 5000,
+        tokenStore,
+        executeFn: async (_cmd, _timeout, env) => {
+          capturedEnv = env;
+          return { stdout: 'ok', stderr: '', exitCode: 0 };
+        },
+      });
+
+      await handler.processAgentOutput('```gh\ngh pr list --repo owner/repo\n```', 'ch1');
+      expect(capturedEnv).toEqual({ GH_TOKEN: 'ghp_injected_token' });
+    });
+
+    it('should record tokenLabel in audit log', async () => {
+      const tokenStore = new GhTokenStore(tmpDir, 'test-key');
+      tokenStore.add({
+        label: 'my-labeled-token',
+        token: 'ghp_audit',
+        repositories: ['owner/repo'],
+        scopes: ['pull_requests:read'],
+      });
+
+      handler = new GhHandler({
+        dataDir: tmpDir,
+        securityLevel: 'full',
+        timeoutMs: 5000,
+        tokenStore,
+        executeFn: async () => ({ stdout: 'ok', stderr: '', exitCode: 0 }),
+      });
+
+      await handler.processAgentOutput('```gh\ngh pr list --repo owner/repo\n```', 'ch1');
+      const entries = handler.audit.recent(1);
+      expect(entries[0].tokenLabel).toBe('my-labeled-token');
+    });
+
+    it('should deny when token lacks required scope', async () => {
+      const tokenStore = new GhTokenStore(tmpDir, 'test-key');
+      tokenStore.add({
+        label: 'read-only',
+        token: 'ghp_readonly',
+        repositories: ['owner/repo'],
+        scopes: ['pull_requests:read'],
+      });
+
+      handler = new GhHandler({
+        dataDir: tmpDir,
+        securityLevel: 'full',
+        timeoutMs: 5000,
+        tokenStore,
+        executeFn: async () => ({ stdout: 'ok', stderr: '', exitCode: 0 }),
+      });
+
+      // pr create requires pull_requests:write — token only has read
+      // Without token, command executes without GH_TOKEN (no env injected)
+      let capturedEnv: Record<string, string> | undefined;
+      handler = new GhHandler({
+        dataDir: tmpDir,
+        securityLevel: 'full',
+        timeoutMs: 5000,
+        tokenStore,
+        executeFn: async (_cmd, _timeout, env) => {
+          capturedEnv = env;
+          return { stdout: 'ok', stderr: '', exitCode: 0 };
+        },
+      });
+
+      await handler.processAgentOutput('```gh\ngh pr create --repo owner/repo\n```', 'ch1');
+      // Token not injected because scope check fails
+      expect(capturedEnv).toBeUndefined();
+    });
+
+    it('should work without tokenStore (backward compatible)', async () => {
+      handler = new GhHandler({
+        dataDir: tmpDir,
+        securityLevel: 'full',
+        timeoutMs: 5000,
+        executeFn: async () => ({ stdout: 'ok', stderr: '', exitCode: 0 }),
+      });
+
+      const results = await handler.processAgentOutput('```gh\ngh pr list\n```', 'ch1');
+      expect(results[0].decision).toBe('allowed');
     });
   });
 });

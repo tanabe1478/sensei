@@ -84,6 +84,60 @@ export function buildCoreCommands(): ReturnType<SlashCommandBuilder['toJSON']>[]
       .addSubcommand((sub) => sub.setName('audit').setDescription('最近の監査ログ'))
       .addSubcommand((sub) => sub.setName('security').setDescription('セキュリティレベル表示'))
       .toJSON(),
+    new SlashCommandBuilder()
+      .setName('gh-token')
+      .setDescription('GitHubトークン管理')
+      .addSubcommand((sub) =>
+        sub
+          .setName('add')
+          .setDescription('トークンを追加')
+          .addStringOption((opt) =>
+            opt.setName('label').setDescription('トークンの名前').setRequired(true),
+          )
+          .addStringOption((opt) =>
+            opt.setName('repos').setDescription('リポジトリ (カンマ区切り: owner/repo,owner/*)').setRequired(true),
+          )
+          .addStringOption((opt) =>
+            opt.setName('scopes').setDescription('スコープ (カンマ区切り: contents:read,pull_requests:write)').setRequired(true),
+          )
+          .addStringOption((opt) =>
+            opt.setName('expires').setDescription('有効期限 (ISO 8601, 例: 2026-12-31)').setRequired(false),
+          ),
+      )
+      .addSubcommand((sub) => sub.setName('list').setDescription('トークン一覧'))
+      .addSubcommand((sub) =>
+        sub
+          .setName('remove')
+          .setDescription('トークンを削除')
+          .addStringOption((opt) =>
+            opt.setName('id').setDescription('トークンID').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('rotate')
+          .setDescription('トークンをローテーション')
+          .addStringOption((opt) =>
+            opt.setName('id').setDescription('トークンID').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('test')
+          .setDescription('トークンの接続テスト')
+          .addStringOption((opt) =>
+            opt.setName('repo').setDescription('テスト対象リポジトリ (owner/repo)').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('default')
+          .setDescription('デフォルトトークンを設定')
+          .addStringOption((opt) =>
+            opt.setName('id').setDescription('トークンID').setRequired(true),
+          ),
+      )
+      .toJSON(),
   ];
 }
 
